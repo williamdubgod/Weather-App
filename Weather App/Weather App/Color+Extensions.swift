@@ -13,9 +13,3 @@ extension UIColor {
     static let primaryColor = UIColor(named: "primaryColor")
     static let SoftGray = UIColor(named: "softGray")
 }
-
-extension Double {
-    func toCelsius () -> String {
-        "\(Int(self))ºC"
-    }
-}

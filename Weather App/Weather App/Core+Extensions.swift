@@ -38,3 +38,9 @@ extension Int {
         return hour >= dayStartHour && hour < dayEndHour
     }
 }
+
+extension Double {
+    func toCelsius () -> String {
+        "\(Int(self))ºC"
+    }
+}

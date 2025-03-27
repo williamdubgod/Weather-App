@@ -6,9 +6,11 @@
 //
 
 import UIKit
+import CoreLocation
 
 class ViewController: UIViewController {
     
+    // MARK: - UI Components
     private lazy var backgroundView: UIImageView = {
         let imageView = UIImageView()
         imageView.contentMode = .scaleAspectFill
@@ -45,7 +47,6 @@ class ViewController: UIViewController {
     private lazy var weatherIcon: UIImageView = {
         let imageView = UIImageView()
         imageView.translatesAutoresizingMaskIntoConstraints = false
-        imageView.image = UIImage(named: "sunIcon")
         imageView.contentMode = .scaleAspectFit
         return imageView
     }()
@@ -67,13 +68,6 @@ class ViewController: UIViewController {
         return label
     }()
     
-    private lazy var humidityStackView: UIStackView = {
-        let stackView = UIStackView(arrangedSubviews: [humidityLabel, humidityValueLabel])
-        stackView.axis = .horizontal
-        stackView.translatesAutoresizingMaskIntoConstraints = false
-        return stackView
-    }()
-    
     private lazy var windLabel: UILabel = {
         let label = UILabel()
         label.translatesAutoresizingMaskIntoConstraints = false
@@ -91,6 +85,31 @@ class ViewController: UIViewController {
         return label
     }()
     
+    private lazy var searchButton: UIButton = {
+        let button = UIButton()
+        button.translatesAutoresizingMaskIntoConstraints = false
+        button.setImage(UIImage(systemName: "magnifyingglass"), for: .normal)
+        button.tintColor = UIColor.primaryColor
+        button.addTarget(self, action: #selector(showSearchController), for: .touchUpInside)
+        return button
+    }()
+    
+    private lazy var activityIndicator: UIActivityIndicatorView = {
+        let indicator = UIActivityIndicatorView(style: .medium)
+        indicator.translatesAutoresizingMaskIntoConstraints = false
+        indicator.color = .primaryColor
+        indicator.hidesWhenStopped = true
+        return indicator
+    }()
+    
+    // Stack Views (mantidos como no código original)
+    private lazy var humidityStackView: UIStackView = {
+        let stackView = UIStackView(arrangedSubviews: [humidityLabel, humidityValueLabel])
+        stackView.axis = .horizontal
+        stackView.translatesAutoresizingMaskIntoConstraints = false
+        return stackView
+    }()
+    
     private lazy var windStackView: UIStackView = {
         let stackView = UIStackView(arrangedSubviews: [windLabel, windValueLabel])
         stackView.axis = .horizontal
@@ -106,10 +125,7 @@ class ViewController: UIViewController {
         stackView.backgroundColor = UIColor.SoftGray
         stackView.layer.cornerRadius = 10
         stackView.isLayoutMarginsRelativeArrangement = true
-        stackView.directionalLayoutMargins = NSDirectionalEdgeInsets(top: 12,
-                                                                     leading: 24,
-                                                                     bottom: 12,
-                                                                     trailing: 24)
+        stackView.directionalLayoutMargins = NSDirectionalEdgeInsets(top: 12, leading: 24, bottom: 12, trailing: 24)
         return stackView
     }()
     
@@ -127,10 +143,7 @@ class ViewController: UIViewController {
         let layout = UICollectionViewFlowLayout()
         layout.scrollDirection = .horizontal
         layout.itemSize = CGSize(width: 67, height: 84)
-        layout.sectionInset = UIEdgeInsets(top: 0,
-                                           left: 12,
-                                           bottom: 0,
-                                           right: 12)
+        layout.sectionInset = UIEdgeInsets(top: 0, left: 12, bottom: 0, right: 12)
         let collectionView = UICollectionView(frame: .zero, collectionViewLayout: layout)
         collectionView.translatesAutoresizingMaskIntoConstraints = false
         collectionView.backgroundColor = .clear
@@ -160,51 +173,81 @@ class ViewController: UIViewController {
         return tableView
     }()
     
+    // MARK: - Search Components
+    private lazy var searchController: UISearchController = {
+        let controller = UISearchController(searchResultsController: nil)
+        controller.searchResultsUpdater = self
+        controller.obscuresBackgroundDuringPresentation = false
+        controller.searchBar.placeholder = "Buscar cidade..."
+        controller.searchBar.searchTextField.backgroundColor = .white
+        return controller
+    }()
+    
+    private lazy var searchTableView: UITableView = {
+        let tableView = UITableView()
+        tableView.translatesAutoresizingMaskIntoConstraints = false
+        tableView.backgroundColor = .white
+        tableView.layer.cornerRadius = 10
+        tableView.register(UITableViewCell.self, forCellReuseIdentifier: "cityCell")
+        tableView.delegate = self
+        tableView.dataSource = self
+        tableView.isHidden = true
+        return tableView
+    }()
+    
+    // MARK: - Properties
     private let service = Service()
+    private let geocoder = CLGeocoder()
     private var city = City(lat: "-23.6814346", lon: "-46.9249599", name: "São Paulo")
     private var forecastResponse: ForecastResponse?
     
+    private var popularCities: [City] = [
+        City(lat: "-23.5505", lon: "-46.6333", name: "São Paulo"),
+        City(lat: "-22.9068", lon: "-43.1729", name: "Rio de Janeiro"),
+        City(lat: "-15.7801", lon: "-47.9292", name: "Brasília"),
+        City(lat: "-12.9714", lon: "-38.5014", name: "Salvador"),
+        City(lat: "-19.9167", lon: "-43.9345", name: "Belo Horizonte"),
+        City(lat: "-3.71839", lon: "-38.5434", name: "Fortaleza"),
+        City(lat: "-30.0346", lon: "-51.2177", name: "Porto Alegre"),
+        City(lat: "-8.05224", lon: "-34.9286", name: "Recife"),
+        City(lat: "-16.6799", lon: "-49.255", name: "Goiânia"),
+        City(lat: "-25.4284", lon: "-49.2733", name: "Curitiba")
+    ]
+    
+    private var filteredCities: [City] = []
+    
+    // MARK: - Lifecycle
     override func viewDidLoad() {
         super.viewDidLoad()
         setupView()
+        setupSearch()
         fetchData()
     }
     
-    private func fetchData() {
-        service.fecthData(city: city) { [weak self] response in
-            self?.forecastResponse = response
-            DispatchQueue.main.async {
-                self?.loadData()
-            }
-        }
-    }
-    
-    private func loadData() {
-        cityLabel.text = city.name
-        
-        temperatureLabel.text = forecastResponse?.current.temp.toCelsius()
-        humidityValueLabel.text = "\(forecastResponse?.current.humidity ?? 0)mm"
-        windValueLabel.text = "\(forecastResponse?.current.windSpeed ?? 0)km/h"
-        
-        if forecastResponse?.current.dt.isDayTime() ?? true {
-            backgroundView.image = UIImage(named: "background-day")
-        } else {
-            backgroundView.image = UIImage(named: "background-night")
-        }
-        
-        hourlyCollectionView.reloadData()
-        dailyForecastTableView.reloadData()
-    }
-    
+    // MARK: - Setup Methods
     private func setupView() {
+        view.backgroundColor = .white
         setHierarchy()
         setConstraints()
     }
     
-    private func setHierarchy () {
+    private func setupSearch() {
+        definesPresentationContext = true
+        view.addSubview(searchTableView)
+        
+        NSLayoutConstraint.activate([
+            searchTableView.topAnchor.constraint(equalTo: headerView.bottomAnchor, constant: 10),
+            searchTableView.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 35),
+            searchTableView.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -35),
+            searchTableView.heightAnchor.constraint(equalToConstant: 200)
+        ])
+    }
+    
+    private func setHierarchy() {
         view.addSubview(backgroundView)
         view.addSubview(headerView)
         view.addSubview(statsStackView)
+        view.addSubview(hourlyForecastLabel)
         view.addSubview(hourlyForecastLabel)
         view.addSubview(hourlyCollectionView)
         view.addSubview(dailyForecastLabel)
@@ -213,9 +256,12 @@ class ViewController: UIViewController {
         headerView.addSubview(cityLabel)
         headerView.addSubview(temperatureLabel)
         headerView.addSubview(weatherIcon)
+        headerView.addSubview(searchButton)
+        headerView.addSubview(activityIndicator)
     }
     
     private func setConstraints() {
+        // Constraints originais mantidas
         NSLayoutConstraint.activate([
             backgroundView.topAnchor.constraint(equalTo: view.topAnchor),
             backgroundView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
@@ -231,10 +277,17 @@ class ViewController: UIViewController {
         ])
         
         NSLayoutConstraint.activate([
-            cityLabel.topAnchor.constraint(equalTo: headerView.topAnchor, constant: 15),
+            searchButton.topAnchor.constraint(equalTo: headerView.topAnchor, constant: 15),
+            searchButton.trailingAnchor.constraint(equalTo: headerView.trailingAnchor, constant: -15),
+            searchButton.heightAnchor.constraint(equalToConstant: 24),
+            searchButton.widthAnchor.constraint(equalToConstant: 24),
+            
+            activityIndicator.centerYAnchor.constraint(equalTo: searchButton.centerYAnchor),
+            activityIndicator.trailingAnchor.constraint(equalTo: searchButton.leadingAnchor, constant: -10),
+            
+            cityLabel.centerYAnchor.constraint(equalTo: searchButton.centerYAnchor),
             cityLabel.leadingAnchor.constraint(equalTo: headerView.leadingAnchor, constant: 15),
-            cityLabel.trailingAnchor.constraint(equalTo: headerView.trailingAnchor, constant: -15),
-            cityLabel.heightAnchor.constraint(equalToConstant: 20),
+            cityLabel.trailingAnchor.constraint(equalTo: activityIndicator.leadingAnchor, constant: -10),
             
             temperatureLabel.topAnchor.constraint(equalTo: cityLabel.bottomAnchor, constant: 12),
             temperatureLabel.leadingAnchor.constraint(equalTo: headerView.leadingAnchor, constant: 18),
@@ -247,13 +300,12 @@ class ViewController: UIViewController {
             weatherIcon.leadingAnchor.constraint(equalTo: temperatureLabel.trailingAnchor, constant: 8)
         ])
         
+        // Restante das constraints originais...
         NSLayoutConstraint.activate([
             statsStackView.topAnchor.constraint(equalTo: headerView.bottomAnchor, constant: 24),
             statsStackView.widthAnchor.constraint(equalToConstant: 206),
-            statsStackView.centerXAnchor.constraint(equalTo: view.centerXAnchor)
-        ])
-        
-        NSLayoutConstraint.activate([
+            statsStackView.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            
             hourlyForecastLabel.topAnchor.constraint(equalTo: statsStackView.bottomAnchor, constant: 29),
             hourlyForecastLabel.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 35),
             hourlyForecastLabel.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -35),
@@ -261,58 +313,207 @@ class ViewController: UIViewController {
             hourlyCollectionView.topAnchor.constraint(equalTo: hourlyForecastLabel.bottomAnchor, constant: 22),
             hourlyCollectionView.heightAnchor.constraint(equalToConstant: 84),
             hourlyCollectionView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            hourlyCollectionView.trailingAnchor.constraint(equalTo: view.trailingAnchor)
-        ])
-        
-        NSLayoutConstraint.activate([
+            hourlyCollectionView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            
             dailyForecastLabel.topAnchor.constraint(equalTo: hourlyCollectionView.bottomAnchor, constant: 29),
             dailyForecastLabel.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 35),
             dailyForecastLabel.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -35),
-            dailyForecastTableView.topAnchor.constraint(equalTo: dailyForecastLabel.bottomAnchor, constant: 16),
             
+            dailyForecastTableView.topAnchor.constraint(equalTo: dailyForecastLabel.bottomAnchor, constant: 16),
             dailyForecastTableView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             dailyForecastTableView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             dailyForecastTableView.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor)
         ])
     }
+    
+    // MARK: - Data Methods
+    private func fetchData() {
+        activityIndicator.startAnimating()
+        service.fecthData(city: city) { [weak self] response in
+            guard let self = self else { return }
+            
+            DispatchQueue.main.async {
+                self.activityIndicator.stopAnimating()
+                self.forecastResponse = response
+                self.loadData()
+            }
+        }
+    }
+    
+    private func loadData() {
+        cityLabel.text = city.name
+        temperatureLabel.text = forecastResponse?.current.temp.toCelsius()
+        humidityValueLabel.text = "\(forecastResponse?.current.humidity ?? 0)mm"
+        windValueLabel.text = "\(forecastResponse?.current.windSpeed ?? 0)km/h"
+        
+        if let iconName = forecastResponse?.current.weather.first?.icon {
+            weatherIcon.image = UIImage(named: iconName)
+        }
+        
+        if forecastResponse?.current.dt.isDayTime() ?? true {
+            backgroundView.image = UIImage(named: "background-day")
+        } else {
+            backgroundView.image = UIImage(named: "background-night")
+        }
+        
+        hourlyCollectionView.reloadData()
+        dailyForecastTableView.reloadData()
+    }
+    
+    // MARK: - Search Methods
+    @objc private func showSearchController() {
+        present(searchController, animated: true)
+    }
+    
+    private func searchCity(_ cityName: String) {
+        activityIndicator.startAnimating()
+        
+        // Primeiro verifica nas cidades populares
+        if let predefinedCity = popularCities.first(where: { $0.name.lowercased() == cityName.lowercased() }) {
+            self.city = predefinedCity
+            fetchData()
+            return
+        }
+        
+        // Se não encontrou, usa geocodificação
+        geocoder.geocodeAddressString(cityName) { [weak self] (placemarks, error) in
+            guard let self = self else { return }
+            
+            DispatchQueue.main.async {
+                self.activityIndicator.stopAnimating()
+                
+                if let error = error {
+                    self.showCityNotFoundAlert()
+                    print("Geocoding error: \(error.localizedDescription)")
+                    return
+                }
+                
+                guard let placemark = placemarks?.first,
+                      let location = placemark.location,
+                      let locality = placemark.locality else {
+                    self.showCityNotFoundAlert()
+                    return
+                }
+                
+                let newCity = City(
+                    lat: "\(location.coordinate.latitude)",
+                    lon: "\(location.coordinate.longitude)",
+                    name: locality
+                )
+                
+                // Adiciona a nova cidade à lista de populares para futuras buscas
+                if !self.popularCities.contains(where: { $0.name.lowercased() == newCity.name.lowercased() }) {
+                    self.popularCities.insert(newCity, at: 0)
+                }
+                
+                self.city = newCity
+                self.fetchData()
+            }
+        }
+    }
+    
+    private func showCityNotFoundAlert() {
+        let alert = UIAlertController(
+            title: "Cidade não encontrada",
+            message: "Não foi possível encontrar a cidade especificada. Verifique o nome e tente novamente.",
+            preferredStyle: .alert
+        )
+        alert.addAction(UIAlertAction(title: "OK", style: .default))
+        present(alert, animated: true)
+    }
 }
 
+// MARK: - Search Results Updating
+extension ViewController: UISearchResultsUpdating {
+    func updateSearchResults(for searchController: UISearchController) {
+        guard let query = searchController.searchBar.text, !query.isEmpty else {
+            filteredCities = popularCities
+            searchTableView.reloadData()
+            searchTableView.isHidden = true
+            return
+        }
+        
+        filteredCities = popularCities.filter { $0.name.lowercased().contains(query.lowercased()) }
+            .sorted {
+                ($0.name.lowercased().hasPrefix(query.lowercased()) ? 0 : 1) <
+                ($1.name.lowercased().hasPrefix(query.lowercased()) ? 0 : 1)
+            }
+        
+        searchTableView.isHidden = filteredCities.isEmpty
+        searchTableView.reloadData()
+    }
+}
+
+// MARK: - TableView Delegate & DataSource
+extension ViewController: UITableViewDelegate, UITableViewDataSource {
+    func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
+        if tableView == dailyForecastTableView {
+            return forecastResponse?.daily.count ?? 0
+        } else {
+            return filteredCities.count
+        }
+    }
+    
+    func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
+        if tableView == dailyForecastTableView {
+            guard let cell = tableView.dequeueReusableCell(
+                withIdentifier: DailyForecastTableViewCell.identifier,
+                for: indexPath
+            ) as? DailyForecastTableViewCell else {
+                return UITableViewCell()
+            }
+            
+            let forecast = forecastResponse?.daily[indexPath.row]
+            cell.loadData(
+                weekDay: forecast?.dt.toWeekDayName().uppercased(),
+                min: forecast?.temp.min.toCelsius(),
+                max: forecast?.temp.max.toCelsius(),
+                icon: UIImage(named: forecast?.weather.first?.icon ?? "")
+            )
+            return cell
+        } else {
+            let cell = tableView.dequeueReusableCell(withIdentifier: "cityCell", for: indexPath)
+            cell.textLabel?.text = filteredCities[indexPath.row].name
+            return cell
+        }
+    }
+    
+    func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
+        if tableView == searchTableView {
+            let selectedCity = filteredCities[indexPath.row]
+            city = selectedCity
+            searchController.isActive = false
+            fetchData()
+        }
+        tableView.deselectRow(at: indexPath, animated: true)
+    }
+    
+    func tableView(_ tableView: UITableView, heightForRowAt indexPath: IndexPath) -> CGFloat {
+        tableView == dailyForecastTableView ? 60 : 44
+    }
+}
+
+// MARK: - CollectionView DataSource
 extension ViewController: UICollectionViewDataSource {
     func collectionView(_ collectionView: UICollectionView, numberOfItemsInSection section: Int) -> Int {
         forecastResponse?.hourly.count ?? 0
     }
     
     func collectionView(_ collectionView: UICollectionView, cellForItemAt indexPath: IndexPath) -> UICollectionViewCell {
-        guard let cell = collectionView.dequeueReusableCell(withReuseIdentifier: HourlyForecastCollectionViewCell.indentifier, for:  indexPath) as? HourlyForecastCollectionViewCell else {
+        guard let cell = collectionView.dequeueReusableCell(
+            withReuseIdentifier: HourlyForecastCollectionViewCell.indentifier,
+            for: indexPath
+        ) as? HourlyForecastCollectionViewCell else {
             return UICollectionViewCell()
         }
         
         let forecast = forecastResponse?.hourly[indexPath.row]
-        cell.loadData(time: forecast?.dt.toHourFormat(),
-                      icon: UIImage(named: forecast?.weather.first?.icon ?? ""),
-                      temp: forecast?.temp.toCelsius())
+        cell.loadData(
+            time: forecast?.dt.toHourFormat(),
+            icon: UIImage(named: forecast?.weather.first?.icon ?? ""),
+            temp: forecast?.temp.toCelsius()
+        )
         
         return cell
-    }
-}
-
-extension ViewController: UITableViewDataSource, UITableViewDelegate {
-    func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
-        forecastResponse?.daily.count ?? 0
-    }
-    
-    func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
-        guard let cell = tableView.dequeueReusableCell(withIdentifier: DailyForecastTableViewCell.identifier, for: indexPath) as? DailyForecastTableViewCell else {
-            return UITableViewCell()
-        }
-        let forecast = forecastResponse?.daily[indexPath.row]
-        cell.loadData(weekDay: forecast?.dt.toWeekDayName().uppercased(),
-                      min: forecast?.temp.min.toCelsius(),
-                      max: forecast?.temp.max.toCelsius(),
-                      icon: UIImage(named: forecast?.weather.first?.icon ?? ""))
-        return cell
-    }
-    func tableView(_ tableView: UITableView, heightForRowAt indexPath: IndexPath) -> CGFloat {
-        60
     }
 }

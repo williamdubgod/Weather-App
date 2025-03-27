@@ -43,10 +43,13 @@ class DailyForecastTableViewCell: UITableViewCell {
     }()
     
     private lazy var stackView: UIStackView = {
-        let stackView = UIStackView(arrangedSubviews: [weekDayLabel,
-                                                       iconImageView,
-                                                       minTemperatureLabel,
-                                                       maxTemperatureLabel])
+        let stackView = UIStackView(arrangedSubviews: [
+            weekDayLabel,
+            iconImageView,
+            minTemperatureLabel,
+            maxTemperatureLabel
+        ])
+        
         stackView.axis = .horizontal
         stackView.translatesAutoresizingMaskIntoConstraints = false
         stackView.isLayoutMarginsRelativeArrangement = true
