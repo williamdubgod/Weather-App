@@ -12,12 +12,10 @@ Aplicativo nativo desenvolvido em **Swift com UIKit** como parte de um projeto d
 ---
 
 ## 📱 Capturas de Tela
-
-> ![Simulator Screenshot - iPhone 16 Pro - 2025-04-11 at 14 54 49](https://github.com/user-attachments/assets/7fbb9bb2-fc75-4f74-873f-9d71e0ea46af)
-> ![Simulator Screenshot - iPhone 16 Pro - 2025-04-11 at 14 55 10](https://github.com/user-attachments/assets/ff937b62-b0cd-4fff-9f14-d1d774a5b9de)
-
-
-
+<p align="center">
+  <img src="https://github.com/user-attachments/assets/7fbb9bb2-fc75-4f74-873f-9d71e0ea46af" width="300"/>
+  <img src="https://github.com/user-attachments/assets/ff937b62-b0cd-4fff-9f14-d1d774a5b9de" width="300"/>
+</p>
 ---
 
 ## 🔧 Tecnologias Utilizadas
