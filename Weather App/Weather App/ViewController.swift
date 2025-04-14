@@ -1,10 +1,3 @@
-//
-//  ViewController.swift
-//  Weather App
-//
-//  Created by William Vulcano on 17/03/25.
-//
-
 import UIKit
 import CoreLocation
 
@@ -102,7 +95,6 @@ class ViewController: UIViewController {
         return indicator
     }()
     
-    // Stack Views (mantidos como no código original)
     private lazy var humidityStackView: UIStackView = {
         let stackView = UIStackView(arrangedSubviews: [humidityLabel, humidityValueLabel])
         stackView.axis = .horizontal
@@ -197,23 +189,8 @@ class ViewController: UIViewController {
     
     // MARK: - Properties
     private let service = Service()
-    private let geocoder = CLGeocoder()
     private var city = City(lat: "-23.6814346", lon: "-46.9249599", name: "São Paulo")
     private var forecastResponse: ForecastResponse?
-    
-    private var popularCities: [City] = [
-        City(lat: "-23.5505", lon: "-46.6333", name: "São Paulo"),
-        City(lat: "-22.9068", lon: "-43.1729", name: "Rio de Janeiro"),
-        City(lat: "-15.7801", lon: "-47.9292", name: "Brasília"),
-        City(lat: "-12.9714", lon: "-38.5014", name: "Salvador"),
-        City(lat: "-19.9167", lon: "-43.9345", name: "Belo Horizonte"),
-        City(lat: "-3.71839", lon: "-38.5434", name: "Fortaleza"),
-        City(lat: "-30.0346", lon: "-51.2177", name: "Porto Alegre"),
-        City(lat: "-8.05224", lon: "-34.9286", name: "Recife"),
-        City(lat: "-16.6799", lon: "-49.255", name: "Goiânia"),
-        City(lat: "-25.4284", lon: "-49.2733", name: "Curitiba")
-    ]
-    
     private var filteredCities: [City] = []
     
     // MARK: - Lifecycle
@@ -248,7 +225,6 @@ class ViewController: UIViewController {
         view.addSubview(headerView)
         view.addSubview(statsStackView)
         view.addSubview(hourlyForecastLabel)
-        view.addSubview(hourlyForecastLabel)
         view.addSubview(hourlyCollectionView)
         view.addSubview(dailyForecastLabel)
         view.addSubview(dailyForecastTableView)
@@ -261,7 +237,6 @@ class ViewController: UIViewController {
     }
     
     private func setConstraints() {
-        // Constraints originais mantidas
         NSLayoutConstraint.activate([
             backgroundView.topAnchor.constraint(equalTo: view.topAnchor),
             backgroundView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
@@ -300,7 +275,6 @@ class ViewController: UIViewController {
             weatherIcon.leadingAnchor.constraint(equalTo: temperatureLabel.trailingAnchor, constant: 8)
         ])
         
-        // Restante das constraints originais...
         NSLayoutConstraint.activate([
             statsStackView.topAnchor.constraint(equalTo: headerView.bottomAnchor, constant: 24),
             statsStackView.widthAnchor.constraint(equalToConstant: 206),
@@ -329,13 +303,17 @@ class ViewController: UIViewController {
     // MARK: - Data Methods
     private func fetchData() {
         activityIndicator.startAnimating()
-        service.fecthData(city: city) { [weak self] response in
-            guard let self = self else { return }
-            
+        service.fetchData(city: city) { [weak self] result in
             DispatchQueue.main.async {
-                self.activityIndicator.stopAnimating()
-                self.forecastResponse = response
-                self.loadData()
+                self?.activityIndicator.stopAnimating()
+                
+                switch result {
+                case .success(let response):
+                    self?.forecastResponse = response
+                    self?.loadData()
+                case .failure(let error):
+                    self?.showErrorAlert(message: "Falha ao carregar dados do clima: \(error.localizedDescription)")
+                }
             }
         }
     }
@@ -343,18 +321,14 @@ class ViewController: UIViewController {
     private func loadData() {
         cityLabel.text = city.name
         temperatureLabel.text = forecastResponse?.current.temp.toCelsius()
-        humidityValueLabel.text = "\(forecastResponse?.current.humidity ?? 0)mm"
-        windValueLabel.text = "\(forecastResponse?.current.windSpeed ?? 0)km/h"
+        humidityValueLabel.text = "\(forecastResponse?.current.humidity ?? 0)%"
+        windValueLabel.text = "\(forecastResponse?.current.windSpeed.rounded(toPlaces: 1) ?? 0) km/h"
         
         if let iconName = forecastResponse?.current.weather.first?.icon {
             weatherIcon.image = UIImage(named: iconName)
         }
         
-        if forecastResponse?.current.dt.isDayTime() ?? true {
-            backgroundView.image = UIImage(named: "background-day")
-        } else {
-            backgroundView.image = UIImage(named: "background-night")
-        }
+        backgroundView.image = UIImage(named: forecastResponse?.current.dt.isDayTime() ?? true ? "background-day" : "background-night")
         
         hourlyCollectionView.reloadData()
         dailyForecastTableView.reloadData()
@@ -368,54 +342,26 @@ class ViewController: UIViewController {
     private func searchCity(_ cityName: String) {
         activityIndicator.startAnimating()
         
-        // Primeiro verifica nas cidades populares
-        if let predefinedCity = popularCities.first(where: { $0.name.lowercased() == cityName.lowercased() }) {
-            self.city = predefinedCity
-            fetchData()
-            return
-        }
-        
-        // Se não encontrou, usa geocodificação
-        geocoder.geocodeAddressString(cityName) { [weak self] (placemarks, error) in
-            guard let self = self else { return }
-            
+        service.searchCities(name: cityName) { [weak self] result in
             DispatchQueue.main.async {
-                self.activityIndicator.stopAnimating()
+                self?.activityIndicator.stopAnimating()
                 
-                if let error = error {
-                    self.showCityNotFoundAlert()
-                    print("Geocoding error: \(error.localizedDescription)")
-                    return
+                switch result {
+                case .success(let cities):
+                    self?.filteredCities = cities
+                    self?.searchTableView.isHidden = cities.isEmpty
+                    self?.searchTableView.reloadData()
+                case .failure(let error):
+                    self?.showErrorAlert(message: "Falha na busca: \(error.localizedDescription)")
                 }
-                
-                guard let placemark = placemarks?.first,
-                      let location = placemark.location,
-                      let locality = placemark.locality else {
-                    self.showCityNotFoundAlert()
-                    return
-                }
-                
-                let newCity = City(
-                    lat: "\(location.coordinate.latitude)",
-                    lon: "\(location.coordinate.longitude)",
-                    name: locality
-                )
-                
-                // Adiciona a nova cidade à lista de populares para futuras buscas
-                if !self.popularCities.contains(where: { $0.name.lowercased() == newCity.name.lowercased() }) {
-                    self.popularCities.insert(newCity, at: 0)
-                }
-                
-                self.city = newCity
-                self.fetchData()
             }
         }
     }
     
-    private func showCityNotFoundAlert() {
+    private func showErrorAlert(message: String) {
         let alert = UIAlertController(
-            title: "Cidade não encontrada",
-            message: "Não foi possível encontrar a cidade especificada. Verifique o nome e tente novamente.",
+            title: "Erro",
+            message: message,
             preferredStyle: .alert
         )
         alert.addAction(UIAlertAction(title: "OK", style: .default))
@@ -423,28 +369,20 @@ class ViewController: UIViewController {
     }
 }
 
-// MARK: - Search Results Updating
+// MARK: - Extensions
+
 extension ViewController: UISearchResultsUpdating {
     func updateSearchResults(for searchController: UISearchController) {
         guard let query = searchController.searchBar.text, !query.isEmpty else {
-            filteredCities = popularCities
-            searchTableView.reloadData()
             searchTableView.isHidden = true
+            filteredCities = []
             return
         }
         
-        filteredCities = popularCities.filter { $0.name.lowercased().contains(query.lowercased()) }
-            .sorted {
-                ($0.name.lowercased().hasPrefix(query.lowercased()) ? 0 : 1) <
-                ($1.name.lowercased().hasPrefix(query.lowercased()) ? 0 : 1)
-            }
-        
-        searchTableView.isHidden = filteredCities.isEmpty
-        searchTableView.reloadData()
+        searchCity(query)
     }
 }
 
-// MARK: - TableView Delegate & DataSource
 extension ViewController: UITableViewDelegate, UITableViewDataSource {
     func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
         if tableView == dailyForecastTableView {
@@ -473,16 +411,21 @@ extension ViewController: UITableViewDelegate, UITableViewDataSource {
             return cell
         } else {
             let cell = tableView.dequeueReusableCell(withIdentifier: "cityCell", for: indexPath)
-            cell.textLabel?.text = filteredCities[indexPath.row].name
+            let city = filteredCities[indexPath.row]
+            if let state = city.state {
+                cell.textLabel?.text = "\(city.name), \(state)"
+            } else {
+                cell.textLabel?.text = city.name
+            }
             return cell
         }
     }
     
     func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         if tableView == searchTableView {
-            let selectedCity = filteredCities[indexPath.row]
-            city = selectedCity
+            city = filteredCities[indexPath.row]
             searchController.isActive = false
+            searchTableView.isHidden = true
             fetchData()
         }
         tableView.deselectRow(at: indexPath, animated: true)
@@ -493,7 +436,6 @@ extension ViewController: UITableViewDelegate, UITableViewDataSource {
     }
 }
 
-// MARK: - CollectionView DataSource
 extension ViewController: UICollectionViewDataSource {
     func collectionView(_ collectionView: UICollectionView, numberOfItemsInSection section: Int) -> Int {
         forecastResponse?.hourly.count ?? 0
@@ -515,5 +457,13 @@ extension ViewController: UICollectionViewDataSource {
         )
         
         return cell
+    }
+}
+
+// Extensão auxiliar para arredondamento
+extension Double {
+    func rounded(toPlaces places: Int) -> Double {
+        let divisor = pow(10.0, Double(places))
+        return (self * divisor).rounded() / divisor
     }
 }

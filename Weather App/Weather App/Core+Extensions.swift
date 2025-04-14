@@ -44,3 +44,9 @@ extension Double {
         "\(Int(self))ºC"
     }
 }
+
+extension String {
+    func folding() -> String {
+        return self.folding(options: .diacriticInsensitive, locale: .current)
+    }
+}
